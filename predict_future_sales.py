@@ -56,6 +56,12 @@ from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Dropout
 from keras.layers import SimpleRNN, LSTM, GRU
 
+from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import KFold, cross_val_score
+import xgboost as xgb
+import lightgbm as lgb
+
+
 # 경로설정
 os.chdir('/Users/heechankang/projects/pythonworkspace/git_study/kaggle/competitive-data-science-predict-future-sales')
 
@@ -75,16 +81,20 @@ item_categories #(84, 2)
 items #(22170, 3)
 # 'item_name', 'item_id', 'item_category_id'
 train #(2935849, 6)
-#'date', 'date_block_num', 'shop_id', 'item_id', 'item_price', TODO:'item_cnt_day'
+#'date', 'date_block_num', 'shop_id', 'item_id', 'item_price', 'item_cnt_day'
 shops #(60, 2)
 # shop_name, shop_id
 ###########
 test #(214200, 3)
 # 'ID', 'shop_id', 'item_id'
 sample_submission #(214200, 2)
-# 'ID', TODO:'item_cnt_month'
+# 'ID', 'item_cnt_month'
 
 ############
+# 목표 확인..
+sample_submission # 껍데기. ID에 대해 월별 판매량 답안작성
+test # ID는 각 매장별 각 아이템 판매량을 뜻함.
+
 # 데이터 리스트
 l = ['item_categories', 'items', 'train', 'shops', 'test', 'sample_submission']
 ll = [item_categories, items, train, shops, test, sample_submission]
@@ -114,12 +124,7 @@ print('전:',train.shape) #(2935849, 6)
 train.drop_duplicates(inplace=True)
 print('후:',train.shape) #(2935843, 6) - 6개 감소
 
-# 그룹별로 모아보려다가, 일단 패스
-train
-train_item_group = train.groupby('item_id').sum()
-train_item_group
-
-# 일단 최대한 필요해보이는 것들 합쳐보자. 카테고리 합치기
+# 카테고리 합치기
 data = pd.merge(train, items, on = 'item_id', how = 'left')
 data.drop('item_name',axis = 1, inplace = True)
 
@@ -164,6 +169,10 @@ data.shape # (2935843, 7)
 data = data[data['item_cnt_day']>0]
 data.shape # (2928487, 7)
 
+data.shape # (2928487, 7)
+data = data[data['item_price']>0]
+data.shape # (2928486, 7)
+
 # 다시 살펴보기.. 가게랑 물건 종류가 다름.
 print('data shop 수:', len(data.shop_id.unique())) # 60
 print('test shop 수:', len(test.shop_id.unique())) # 42
@@ -191,39 +200,54 @@ len(set(test.item_id.unique()) - set(items.item_id.unique())) # 0
     # 다행히 items 가 더 큰 범주로 다 포함함. 제한사항 없음.
     # 당연히 아이템 카테고리도 전체를 포괄할 수 있음.
 
+# 추가로 이상치 있는지도 확인
+fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+sns.boxplot(data['item_price'], ax=ax[0])
+sns.boxplot(data['item_cnt_day'], ax=ax[1])
+
+data['item_price'].quantile(0.9999) # 29990
+data[data['item_price']>50000] # 3개 뿐
+# 일단 눈에띄게 떨어져있는 몇개만 제거
+print('제거 전 data.shape:', data.shape) #(2928486, 7)
+data = data[data['item_price']<250000] 
+print('제거 후 data.shape:', data.shape) #(2928485, 7)
+
+data['item_cnt_day'].quantile(0.9999) # 67.15139999985695
+data[data['item_cnt_day']>500]
+print('제거 전 data.shape:', data.shape) #(2928485, 7)
+data = data[data['item_cnt_day']<1000] 
+print('제거 후 data.shape:', data.shape) #(2928483, 7)
+
+# 이상치 제거 후 다시 그려보기
+fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+sns.boxplot(data['item_price'], ax=ax[0])
+sns.boxplot(data['item_cnt_day'], ax=ax[1])
+
 # date_block_num은 뭔지 모르겠음.
 data['date_block_num'].unique() # 0~33까지.
 data['date_block_num'].value_counts()
 data[data['date_block_num']==0]
 data.head(10)
-# 정렬된게 날짜순이 아니었네...
+# 정렬된게 날짜순이 아니었음
 data = data.sort_values('date')
 data = data.reset_index(drop=True)
-
-data['date'].dt.year+data['date'].dt.month
 data
 
 # 모르겠으니 일단 가게별 상태보기.
 data_shop = data.groupby('shop_id').sum()
 data_shop
-# 합쳐놓고 보니, 건질게 item_cnt_day뿐.
-
-# 목표 재확인..
-sample_submission # 껍데기. ID에 대해 월별 판매량 답안작성
-test # ID는 각 매장별 각 아이템 판매량을 뜻함.
+# 합쳐놓고 보니, 건질게 쓸모없음. 월별로 합쳐야함.
 
 # 월별로 상점과 아이템에 대해서 묶어봐야겠음.
 # year_month 컬럼 만들어주기
 data['year_month'] = data['date'].dt.strftime('%Y-%m')
-
-# 그룹핑 해주기
-data_shop = data.groupby(['year_month', 'shop_id']).mean()
-data_shop = data.groupby(['year_month', 'shop_id']).sum()
-data_shop[data_shop['date_block_num']==1]
+data
 
 # date_block_num이 월별로 묶인거였음.. 버림.
 data.drop('date_block_num', axis = 1, inplace = True)
+data
 
+# 그룹핑 해주기
 # 월 단위로 합쳐보니 건질것은 월 판매량뿐..
 data_shop = data.groupby(['year_month', 'shop_id']).sum()
 data_shop_cnt_month = data_shop[['item_cnt_day']]
@@ -247,80 +271,81 @@ data_shop_cnt_month[data_shop_cnt_month.index.get_level_values('shop_id')==0]
 data_item_cnt_month[data_item_cnt_month.index.get_level_values('item_id')==0]
 data_item_cat_cnt_month[data_item_cat_cnt_month.index.get_level_values('item_category_id')==0]
 
-plt.plot(data_shop_cnt_month)
-plt.scatter(data = data_shop_cnt_month, x = data_shop_cnt_month.index, y = 'shop_cnt_month')
 
+# 그룹핑 추가 - 상점, 아이템별
+data_shop_item_sum = data.groupby(['year_month', 'shop_id', 'item_id']).sum()
+data_shop_item_mean = data.groupby(['year_month', 'shop_id', 'item_id']).mean()
+data_shop_item_sum
+data_shop_item_mean
+data_shop_item_mean.columns
 
-# 일단 이상치 있는지도 확인
-sns.boxplot(data['item_price'])
-sns.boxplot(data['item_cnt_day'])
+X=data_shop_item_mean[['item_price','item_category_id']]
+y=data_shop_item_sum['item_cnt_day']
+X.shape
+y
+####
 
-data['item_price'].quantile(0.999)
-data[data['item_price']>100000]
-data[data['item_price']>50000]
-
-data['item_cnt_day'].quantile(0.99)
-data[data['item_cnt_day']>1000]
-data[data['item_cnt_day']>500]
-
-
-
-data
-data.corr()
-
-test
-sample_submission
-
-
-
-# 독립변인 X와 종속변인 y로 나누어주기
-data.columns
-# X = data[['date', 'date_block_num', 'shop_id', 'item_id', 'item_price', 'item_category_id']]
-X = data[['date_block_num', 'shop_id', 'item_id', 'item_price', 'item_category_id']]
-y = data['item_cnt_day']
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# 일단 스케일이고 뭐고 없이 정면돌파
-# 트레인/테스트셋 나누기
+# 스플릿
 from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=1)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3,random_state=1)
 
-# 형태확인
 print('X_train:', X_train.shape)
-print('y_train:', y_train.shape)
 print('X_test:', X_test.shape)
+print('y_train:', y_train.shape)
 print('y_test:', y_test.shape)
 
-# 걍 꼬라박
+
+#스케일링
+## Scaling
+scaler = preprocessing.StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+X_train_scaled
+X_test_scaled
+
+# 걍 꼬라박1
 from xgboost import XGBRegressor
 model_reg = XGBRegressor()
-model_reg.fit(X_train, y_train)
+model_reg.fit(X_train_scaled, y_train)
 
-from lightgbm import LGBMRegressor
-model_lgbm = LGBMRegressor()
-model_lgbm.fit(X_train, y_train)
+# 꼬라박1
+y_pred = model_reg.predict(X_test_scaled)
 
-y_pred = model_reg.predict(X_train)
-y_pred = model_lgbm.predict(X_test)
-
+plt.figure(figsize = (10, 10))
 plt.scatter(x = y_test, y = y_pred)
+plt.show()
+
+test
+
+submission = sample_submission[:]
+submission
+
+
+
+
+############
+RF_reg = RandomForestRegressor(n_estimators = 100)
+RF_reg.fit(x_train, y_train)
+
+val_pred = RF_reg.predict(x_val)
+train_pred = RF_reg.predict(x_train)
+print(val_pred)
+print(train_pred)
+print_evaluate(y_val, val_pred)
+print_evaluate(y_train, train_pred)
+
+
+def print_evaluate(true, predicted):  
+    mae = metrics.mean_absolute_error(true, predicted)
+    mse = metrics.mean_squared_error(true, predicted)
+    rmse = np.sqrt(metrics.mean_squared_error(true, predicted))
+    r2_square = metrics.r2_score(true, predicted)
+    print('MAE:', mae)
+    print('MSE:', mse)
+    print('RMSE:', rmse)
+    print('R2 Square', r2_square)
+    print('__________________________________')
 
 
 
@@ -328,13 +353,103 @@ plt.scatter(x = y_test, y = y_pred)
 
 
 
+####
+
+# 같은 가게에서, 같은 제품을 다른 가격에 파는 경우도 있음..
+data[(data['year_month']=='2013-01') & (data['shop_id']==0) & (data['item_id']==51)]
+
+# 상점별 매출
+data_shop_cnt_month.unstack(level=1)
+plt.figure(figsize = (10, 10))
+plt.plot(data_shop_cnt_month.unstack(level=1).index, data_shop_cnt_month.unstack(level=1)['shop_cnt_month'])
+plt.xticks(rotation = 90)
+plt.show() # 11, 12월에 상점 매출 오름
+
+# 상품별 매출
+data_item_cnt_month.unstack(level=1)
+plt.figure(figsize = (10, 10))
+plt.plot(data_item_cnt_month.unstack(level=1).index, data_item_cnt_month.unstack(level=1)['item_cnt_month'])
+plt.xticks(rotation = 90)
+plt.show() # 출시 직후 높다가 점점 떨어짐. 12000 넘는 이상치? 도 하나 있는데 카테고리 확인해야할듯.
+
+data_item_cnt_month[data_item_cnt_month['item_cnt_month']>12000] # 20949번 item
+# Фирменный пакет майка 1С Интерес белый
+# 카테고리 71
+
+# 카테고리별 매출
+data_item_cat_cnt_month.unstack(level=1)
+plt.figure(figsize = (10, 10))
+plt.plot(data_item_cat_cnt_month.unstack(level=1).index, data_item_cat_cnt_month.unstack(level=1)['item_cat_cnt_month'])
+plt.xticks(rotation = 90)
+plt.show() # 11, 12월에 상점 매출 오름
+
+
+
+# 시계열성 배재하고 돌려보기
+data_nodate = data.drop(['date', 'year_month'], axis=1)
+data_nodate.info()
+
+len(data.columns)
+data.corr()
+test[test['item_id']==20949].count()
+data_nodate.columns
+data_nodate
 data
 
-data2 = data[:]
-data2
+
+# 모르겠고 일단 그래프 그려보기
+fig, ax = plt.subplots(3, 2, figsize=(20, 20))
+count = 0
+columns = data_nodate.columns
+for row in tqdm(range(3)):
+    for col in range(2):
+        sns.kdeplot(data_nodate[columns[count]], ax=ax[row][col])
+        ax[row][col].set_title(columns[count], fontsize=15)
+        count+=1
+        if count == 5 :
+            break
+
+# 로그변환
+skew_columns = ['item_price','item_cnt_day']
+for c in skew_columns:
+    data_nodate[c] = np.log1p(data_nodate[c].values)
+
+# 다시 그래프 그려보기
+fig, ax = plt.subplots(1, 2, figsize=(20, 10))
+sns.kdeplot(data_nodate['item_price'], ax=ax[0])
+sns.kdeplot(data_nodate['item_cnt_day'], ax=ax[1])
 
 
+# 나눌 준비
+X = data_nodate
+y = X['item_cnt_day']
+del X['item_cnt_day']
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3,random_state=1)
+
+print('X_train:', X_train.shape)
+print('X_test:', X_test.shape)
+print('y_train:', y_train.shape)
+print('y_test:', y_test.shape)
 
 
+gboost = GradientBoostingRegressor(random_state=1)
+xgboost = xgb.XGBRegressor(random_state=1)
+lightgbm = lgb.LGBMRegressor(random_state=1)
 
+models = [
+    {'model':gboost, 'name':'GradientBoosting'}, {'model':xgboost, 'name':'XGBoost'},
+    {'model':lightgbm, 'name':'LightGBM'}
+]
+
+
+def get_cv_score(models):                        #TODO:
+    kfold = KFold(n_splits=5, random_state=1, shuffle=True).get_n_splits(X_train.values)
+    for m in models:
+        print("Model {} CV score : {:.4f}".format(m['name'], np.mean(cross_val_score(m['model'], X_train.values, y_train)), 
+                                             kf=kfold))
+
+
+get_cv_score(models)
 
