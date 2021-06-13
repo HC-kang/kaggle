@@ -1,4 +1,5 @@
 # Ignore the warnings
+from typing import cast
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -223,11 +224,12 @@ fig, ax = plt.subplots(1, 2, figsize=(15, 5))
 sns.boxplot(data['item_price'], ax=ax[0])
 sns.boxplot(data['item_cnt_day'], ax=ax[1])
 
-# date_block_num은 뭔지 모르겠음.
-data['date_block_num'].unique() # 0~33까지.
-data['date_block_num'].value_counts()
-data[data['date_block_num']==0]
-data.head(10)
+# # date_block_num은 뭔지 모르겠음.
+# data['date_block_num'].unique() # 0~33까지.
+# data['date_block_num'].value_counts()
+# data[data['date_block_num']==0]
+# data.head(10)
+
 # 정렬된게 날짜순이 아니었음
 data = data.sort_values('date')
 data = data.reset_index(drop=True)
@@ -238,14 +240,494 @@ data_shop = data.groupby('shop_id').sum()
 data_shop
 # 합쳐놓고 보니, 건질게 쓸모없음. 월별로 합쳐야함.
 
-# 월별로 상점과 아이템에 대해서 묶어봐야겠음.
-# year_month 컬럼 만들어주기
-data['year_month'] = data['date'].dt.strftime('%Y-%m')
 data
 
-# date_block_num이 월별로 묶인거였음.. 버림.
-data.drop('date_block_num', axis = 1, inplace = True)
+
+shops['city2'] = shops['shop_name'].apply(lambda x: x.split()[0])
+
+from sklearn.preprocessing import LabelEncoder
+
+encoder = LabelEncoder()
+
+shops['city2'] = encoder.fit_transform(shops['city2'])
+shops
+
+item_categories['cat_name'] = item_categories['item_category_name'].apply(lambda x: x.split()[0])
+item_categories['splitted'] = item_categories['item_category_name'].apply(lambda x: x.split('-'))
+
+item_categories['cat_name2'] = item_categories['splitted'].apply(lambda x: x[1].strip() if len(x) > 1 else x[0].strip())
+item_categories.drop('splitted', axis = 1, inplace= True)
+item_categories
+
+encoder = LabelEncoder()
+item_categories['cat_name3'] = encoder.fit_transform(item_categories[['cat_name']])
+item_categories['cat_name4'] = encoder.fit_transform(item_categories[['cat_name2']])
+item_categories
+
 data
+#data = pd.merge(data, shops, on = 'shop_id', how = 'left')
+# data.drop(['shop_name', 'city2'], axis = 1, inplace=True)
+data
+
+item_categories
+item_categories.drop(['cat_name', 'cat_name2'], axis =1 , inplace=True)
+# data = pd.merge(data, item_categories, on = 'item_category_id', how = 'left')
+# data.drop(['item_category_name', 'cat_name', 'cat_name2'], axis = 1, inplace=True)
+data
+
+# data.columns = ['date', 'date_block_num', 'shop_id', 'item_id','item_price','item_cnt_day', 'item_category_id','city', 'cat_name','cat_name2']
+
+data
+
+
+data2 = []
+
+for i in range(34):
+    sales = data[data['date_block_num']==i]
+    data2.append(np.array(list(product([i], sales.shop_id.unique(), sales.item_id.unique()))))
+
+data2
+
+# 쌓기
+data2 = pd.DataFrame(np.vstack(data2), columns=['date_block_num', 'shop_id', 'item_id'])
+data2.sort_values(by=['date_block_num', 'shop_id', 'item_id'], inplace=True)
+data2
+
+data['revenue'] = data['item_price']*data['item_cnt_day']
+data
+
+# 
+data_item_cnt_month = data.groupby(['date_block_num', 'shop_id', 'item_id']).agg({'item_cnt_day':'sum'})
+data_item_cnt_month.columns = ['item_cnt_month']
+data_item_cnt_month
+
+# data2에 item cnt month 컬럼 합치기
+data2 = pd.merge(data2, data_item_cnt_month, on=['date_block_num', 'shop_id', 'item_id'], how = 'left')
+data2['item_cnt_month']=data2['item_cnt_month'].fillna(0).clip(0, 20)
+data2
+
+test
+test['date_block_num']=34
+test
+
+data2 = pd.concat([data2, test], ignore_index=True, sort=False, keys=['date_block_num', 'shop_id', 'item_id'])
+data2.fillna(0, inplace=True)
+data2
+
+shops.drop(['shop_name'], axis=1, inplace=True)
+shops.columns = ['shop_id', 'city']
+shops
+
+item_categories
+item_categories.drop(['item_category_name', 'cat_name', 'cat_name2'], axis = 1, inplace=True)
+data
+item_categories=data[['item_id', 'cat_name', 'cat_name2','item_category_id']]
+item_categories.columns=['item_category_id', 'cat_name', 'cat_name2']
+item_categories
+
+items.drop('item_name', axis = 1, inplace=True)
+items
+
+data2 = pd.merge(data2, shops, on='shop_id', how='left')
+data2
+data2 = pd.merge(data2, items, on='item_id', how='left')
+data2
+data2 = pd.merge(data2, item_categories, on='item_category_id', how='left')
+data2.columns = ['date_block_num', 'shop_id', 'item_id', 'item_cnt_month', 'ID', 'city','item_category_id', 'cat_name', 'cat_name2']
+data2
+
+def lagger(df, lags, col):
+    tmp = df[['date_block_num', 'shop_id', 'item_id', col]]
+    for i in lags:
+        shifted = tmp[:]
+        shifted.columns = ['date_block_num', 'shop_id', 'item_id', col+'_lag_'+str(i)]
+        shifted['date_block_num'] += i
+        df = pd.merge(df, shifted, on=['date_block_num', 'shop_id', 'item_id'], how='left')
+    return df
+
+data2 = lagger(data2, [1,2,3,6,12], 'item_cnt_month')
+
+
+# 다이어트
+data2.info()
+data2['date_block_num']=data2['date_block_num'].astype('int8')
+data2['shop_id']=data2['shop_id'].astype('int8')
+
+lll=[1,2,3,6,12]
+for i in lll:
+    data2[f'item_cnt_month_lag_{i}']=data2[f'item_cnt_month_lag_{i}'].astype('float16')
+data2.info()
+
+lll = ['item_category_id', 'cat_name', 'cat_name2']
+for i in lll:
+    data2[i]=data2[i].astype('int8')
+data2.info()
+data2['ID'] = data2['ID'].astype('int32')
+
+data2.info()
+
+# 단순 월별 평균 판매량
+data_blocknum_cnt_month_mean = data2.groupby(['date_block_num']).agg({'item_cnt_month':'mean'})
+data_blocknum_cnt_month_mean.reset_index(inplace=True)
+data_blocknum_cnt_month_mean
+
+data2 = pd.merge(data2, data_blocknum_cnt_month_mean, on='date_block_num', how='left')
+data2.info()
+data2.columns = ['date_block_num', 'shop_id', 'item_id', 'item_cnt_month', 'ID','city', 'item_category_id', 'cat_name', 'cat_name2','item_cnt_month_lag_1', 'item_cnt_month_lag_2', 'item_cnt_month_lag_3','item_cnt_month_lag_6', 'item_cnt_month_lag_12', 'item_cnt_month_mean']
+data2
+
+# 월, 상점별 평균 판매량
+data_shop_cnt_month_mean = data2.groupby(['date_block_num', 'shop_id']).agg({'item_cnt_month':'mean'})
+data_shop_cnt_month_mean.reset_index(inplace=True)
+data_shop_cnt_month_mean.columns=['date_block_num', 'shop_id', 'item_cnt_month_shop_mean']
+
+data2 = pd.merge(data2, data_shop_cnt_month_mean, on=['date_block_num', 'shop_id'], how='left')
+data2
+
+# 월, 품목별 평균 판매량
+data_item_cnt_month_mean=data2.groupby(['date_block_num', 'item_id']).agg({'item_cnt_month':'mean'})
+data_item_cnt_month_mean.reset_index(inplace=True)
+data_item_cnt_month_mean.columns=['date_block_num', 'item_id', 'item_cnt_month_item_mean']
+
+data2 = pd.merge(data2, data_item_cnt_month_mean, on=['date_block_num', 'item_id'], how='left')
+data2.columns=['date_block_num', 'shop_id', 'item_id', 'item_cnt_month', 'ID', 'city',
+       'item_category_id', 'cat_name', 'cat_name2', 'item_cnt_month_lag_1',
+       'item_cnt_month_lag_2', 'item_cnt_month_lag_3', 'item_cnt_month_lag_6',
+       'item_cnt_month_lag_12', 'item_cnt_month_mean',
+       'item_cnt_month_shop_mean', 'item_cnt_month_item_mean']
+data2
+
+# 월 카테고리별 평균 판매량
+data_cat_cnt_month_mean = data2.groupby(['date_block_num', 'item_category_id']).agg({'item_cnt_month':'mean'})
+data_cat_cnt_month_mean.reset_index(inplace=True)
+data_cat_cnt_month_mean.columns=['date_block_num', 'item_category_id', 'item_cnt_month_cat_mean']
+data_cat_cnt_month_mean
+
+data2 = pd.merge(data2, data_cat_cnt_month_mean, on=['date_block_num', 'item_category_id'], how= 'left')
+data2.info()
+
+# 월, 가게, 카테고리별 평균 판매량
+data_shop_cat_cnt_month_mean = data2.groupby(['date_block_num', 'shop_id', 'item_category_id']).agg({'item_cnt_month':'mean'})
+data_shop_cat_cnt_month_mean.reset_index(inplace=True)
+data_shop_cat_cnt_month_mean.columns=['date_block_num', 'shop_id', 'item_category_id', 'item_cnt_month_shop_cat_mean']
+
+data2 = pd.merge(data2, data_shop_cat_cnt_month_mean, on=['date_block_num', 'shop_id', 'item_category_id'], how='left')
+data2
+
+# 월, 가게, 캣네임1별 평균 판매량
+data_shop_catname_cnt_month_mean = data2.groupby(['date_block_num', 'shop_id', 'cat_name']).agg({'item_cnt_month':'mean'})
+data_shop_catname_cnt_month_mean.reset_index(inplace=True)
+data_shop_catname_cnt_month_mean.columns=['date_block_num', 'shop_id', 'cat_name', 'item_cnt_month_shop_catname_mean']
+data_shop_catname_cnt_month_mean
+
+data2 = pd.merge(data2, data_shop_catname_cnt_month_mean, on=['date_block_num', 'shop_id', 'cat_name'], how='left')
+data2.info()
+
+# 월, 가게, 캣네임2별 평균 판매량
+data_shop_catname2_cnt_month_mean = data2.groupby(['date_block_num', 'shop_id', 'cat_name2']).agg({'item_cnt_month':'mean'})
+data_shop_catname2_cnt_month_mean.reset_index(inplace=True)
+data_shop_catname2_cnt_month_mean.columns=['date_block_num', 'shop_id', 'cat_name2', 'item_cnt_month_shop_catname2_mean']
+data_shop_catname2_cnt_month_mean
+
+data2 = pd.merge(data2, data_shop_catname2_cnt_month_mean, on=['date_block_num', 'shop_id', 'cat_name2'], how='left')
+data2.info()
+
+# 월, 도시별 평균 판매량
+data_city_cnt_month_mean = data2.groupby(['date_block_num', 'city']).agg({'item_cnt_month':'mean'})
+data_city_cnt_month_mean.reset_index(inplace=True)
+data_city_cnt_month_mean.columns=['date_block_num', 'city', 'item_cnt_month_city']
+data_city_cnt_month_mean
+
+data2 = pd.merge(data2, data_city_cnt_month_mean, on=['date_block_num', 'city'], how = 'left')
+data2
+
+# 월, 아이템, 도시별 평균 판매량
+data_item_city_cnt_month_mean = data2.groupby(['date_block_num', 'item_id', 'city']).agg({'item_cnt_month':'mean'})
+data_item_city_cnt_month_mean.reset_index(inplace=True)
+data_item_city_cnt_month_mean.columns=['date_block_num', 'item_id', 'city', 'item_cnt_month_item_city']
+data_item_city_cnt_month_mean
+
+data2 = pd.merge(data2, data_item_city_cnt_month_mean, on=['date_block_num', 'item_id', 'city'], how='left')
+data2
+
+# 월, 캣네임 별 평균 판매량 
+data_catname_cnt_month_mean = data2.groupby(['date_block_num', 'cat_name']).agg({'item_cnt_month':'mean'})
+data_catname_cnt_month_mean.reset_index(inplace=True)
+data_catname_cnt_month_mean.columns=['date_block_num', 'cat_name', 'item_cnt_month_catname']
+data_catname_cnt_month_mean
+
+data2 = pd.merge(data2, data_catname_cnt_month_mean, on=['date_block_num', 'cat_name'], how = 'left')
+data2.columns
+
+
+# 월, 캣네임2 별 평균 판매량 
+data_catname2_cnt_month_mean = data2.groupby(['date_block_num', 'cat_name2']).agg({'item_cnt_month':'mean'})
+data_catname2_cnt_month_mean.reset_index(inplace=True)
+data_catname2_cnt_month_mean.columns=['date_block_num', 'cat_name2', 'item_cnt_month_catname2']
+data_catname2_cnt_month_mean
+
+data2 = pd.merge(data2, data_catname2_cnt_month_mean, on=['date_block_num', 'cat_name2'], how = 'left')
+data2
+
+
+# 2차 다이어트
+lll=['item_cnt_month_mean',
+       'item_cnt_month_shop_mean', 'item_cnt_month_item_mean',
+       'item_cnt_month_cat_mean', 'item_cnt_month_shop_cat_mean',
+       'item_cnt_month_shop_catname_mean', 'item_cnt_month_shop_catname2_mean',
+       'item_cnt_month_city', 'item_cnt_month_item_city',
+       'item_cnt_month_catname','item_cnt_month_catname2']
+for i in lll:
+    data2[i]=data2[i].astype('float16')
+data2.info()
+data2
+data
+
+data_item_price_mean = data.groupby('item_id').agg({'item_price':'mean'})
+data_item_price_mean.reset_index(inplace=True)
+data_item_price_mean.columns = ['item_id', 'item_price_mean']
+data_item_price_mean
+
+data2=pd.merge(data2, data_item_price_mean, on=['item_id'], how='left')
+data2
+
+data_item_price_month_mean = data.groupby(['date_block_num', 'item_id']).agg({'item_price':'mean'})
+data_item_price_month_mean.reset_index(inplace=True)
+data_item_price_month_mean.columns = ['date_block_num', 'item_id', 'item_price_month_mean']
+data_item_price_month_mean
+
+data2 = pd.merge(data2, data_item_price_month_mean, on=['date_block_num', 'item_id'], how = 'left')
+data2
+
+data2.info()
+data2['item_price_mean'] = data2['item_price_mean'].astype('float16')
+data2['item_price_month_mean'] = data2['item_price_month_mean'].astype('float16')
+data2.info()
+
+data2 = lagger(data2, [1,2,3,4,5,6], 'item_price_month_mean')
+data2.columns
+
+for i in range(1, 6+1):
+    data2['price_lag_'+str(i)] = (data2['item_price_month_mean_lag_'+str(i)]-data2['item_price_mean']) / data2['item_price_mean']
+
+data2.info()
+data2
+
+def select_trend(row):
+    for i in range(1, 6+1):
+        if row['price_lag_'+str(i)]:
+            return row['price_lag_'+str(i)]
+    return 0
+
+data2['price_lag'] = data2.apply(select_trend, axis = 1)
+data2['price_lag'] = data2['price_lag'].astype('float16')
+data2['price_lag']
+data2.info()
+
+data2.columns
+data2.drop(['item_price_mean',
+       'item_price_month_mean', 'item_price_month_mean_lag_1',
+       'item_price_month_mean_lag_2', 'item_price_month_mean_lag_3',
+       'item_price_month_mean_lag_4', 'item_price_month_mean_lag_5',
+       'item_price_month_mean_lag_6', 'price_lag_1', 'price_lag_2',
+       'price_lag_3', 'price_lag_4', 'price_lag_5', 'price_lag_6'], axis = 1, inplace=True)
+
+data2
+
+data_shop_month_revenue_sum = data.groupby(['date_block_num', 'shop_id']).agg({'revenue':'sum'})
+data_shop_month_revenue_sum.reset_index(inplace=True)
+data_shop_month_revenue_sum.columns = ['date_block_num', 'shop_id', 'shop_month_revenue']
+data_shop_month_revenue_sum
+
+data2 = pd.merge(data2,data_shop_month_revenue_sum, on=['date_block_num', 'shop_id'], how = 'left')
+data2
+
+data_shop_month_revenue_sum = data_shop_month_revenue_sum.groupby('shop_id').agg({'shop_month_revenue':'mean'})
+data_shop_month_revenue_sum.columns = ['shop_month_revenue_mean']
+data_shop_month_revenue_sum.reset_index(inplace=True)
+data_shop_month_revenue_sum
+
+data2=pd.merge(data2, data_shop_month_revenue_sum, on=['shop_id'], how = 'left')
+data2
+
+data2['delta_revenue'] = (data2['shop_month_revenue'] - data2['shop_month_revenue_mean'])/data2['shop_month_revenue_mean']
+
+data2 = lagger(data2, [1], 'delta_revenue')
+data2.columns
+
+data2.drop(['shop_month_revenue', 'shop_month_revenue_mean', 'delta_revenue'], axis = 1, inplace=True)
+data2
+
+data2['month'] = data2['date_block_num'] % 12
+
+days = pd.Series([31,28,31,30,31,30,31,31,30,31,30,31])
+
+data2['days'] = data2['month'].map(days)
+data2
+data2.info()
+data2['days']=data2['days'].astype('int8')
+data2['delta_revenue_lag_1']=data2['delta_revenue_lag_1'].astype('float16')
+data2['item_cnt_month']=data2['item_cnt_month'].astype('float16')
+data2.info()
+
+cache = {}
+data2['item_shop_last_sale'] = -1
+data2['item_shop_last_sale'] = data2['item_shop_last_sale'].astype('int8')
+for idx, row in tqdm(data2.iterrows()):
+    key = str(row.item_id)+' '+str(row.shop_id)
+    if key not in cache:
+        if row.item_cnt_month!=0:
+            cache[key] = row.date_block_num
+    else:
+        last_date_block_num = cache[key]
+        data2.at[idx, 'item_shop_last_sale'] = row.date_block_num - last_date_block_num
+        cache[key] = row.date_block_num
+
+
+cache = {}
+data2['item_last_sale'] = -1
+data2['item_last_sale'] = data2['item_last_sale'].astype('int8')
+for idx, row in tqdm(data2.iterrows()):
+    key = row.item_id
+    if key not in cache:
+        if row.item_cnt_month!=0:
+            cache[key] = row.date_block_num
+    else:
+        last_date_block_num = cache[key]
+        if row.date_block_num > last_date_block_num:
+            data2.at[idx, 'item_last_sale']=row.date_block_num - last_date_block_num
+            cache[key] = row.date_block_num
+
+data2['item_shop_first_sale'] = data2['date_block_num'] - data2.groupby(['item_id', 'shop_id'])['date_block_num'].transform('min')
+data2['item_first_sale'] = data2['date_block_num'] - data2.groupby('item_id')['date_block_num'].transform('min')
+
+# ~12월 드롭
+data2 = data2[data2['date_block_num']>11]
+
+# 결측치 0으로 채우기
+def fill_na(df):
+    for col in df.columns:
+        if ('_lag_' in col) & (df[col].isnull().any()):
+            if ('item_cnt' in col):
+                df[col].fillna(0, inplace=True)
+    return df
+
+data2 = fill_na(data2)
+
+data2.columns
+
+import gc
+data2.to_pickle('data2.pkl')
+del data2
+del cache
+del items
+del shops
+del train
+del data
+gc.collect();
+
+data = pd.read_pickle('data2.pkl')
+data.drop(['item_last_sale', 'item_cnt_month_lag_12', 'days', 'cat_name', 'city', 'item_shop_last_sale'], axis = 1, inplace=True)
+
+X_train = data[data['date_block_num']<33].drop('item_cnt_month', axis = 1)
+y_train = data[data['date_block_num']<33]['item_cnt_month']
+X_valid = data[data['date_block_num']==33].drop('item_cnt_month', axis = 1)
+y_valid = data[data['date_block_num']==33]['item_cnt_month']
+X_test = data[data['date_block_num']==34].drop('item_cnt_month', axis = 1)
+
+del data
+gc.collect();
+
+
+# 티스토리 참고
+from xgboost import XGBRegressor
+model = XGBRegressor(
+    max_depth = 8,
+    n_estimators = 1000,
+    min_child_weight=300,
+    colsample_bytree = 0.8,
+    subsample=0.8,
+    eta=0.3,
+    seed=42)
+
+model.fit(
+    X_train,
+    y_train,
+    eval_metric='rmse',
+    eval_set=[(X_train, y_train), (X_valid, y_valid)],
+    verbose=True,
+    early_stopping_rounds=10
+)
+
+y_pred = model.predict(X_valid).clip(0, 20)
+y_test = model.predict(X_test).clip(0, 20)
+
+# 기본모델
+xgb = XGBClassifier(tree_method='hist', random_state = 42)
+scores = cross_validate(xgb, train_input, train_target, return_train_score = True, n_jobs = -1)
+print(np.mean(scores['train_score']), np.mean(scores['test_score']))
+
+from lightgbm import LGBMRegressor
+lgbm = LGBMRegressor(
+    max_depth=8,
+    n_estimators=1000,
+    min_child_weight=300,
+    colsample_bytree=0.8,
+    subsample=0.8,
+    eta=0.3,
+    seep=42
+)
+lgbm.fit(
+    X_train,
+    y_train,
+    eval_metric='rmse',
+    eval_set=[(X_train, y_train), (X_valid, y_valid)],
+    verbose=True,
+    early_stopping_rounds=10
+)
+
+y_test = lgbm.predict(X_test).clip(0, 20)
+
+
+test
+submission = pd.DataFrame(
+    {
+        'ID':test.index,
+        'item_cnt_month':y_test
+    }
+)
+submission.to_csv('lgbm_submission.csv', index=False)
+
+from xgboost import plot_importance
+
+fig, ax = plt.subplots(1, 1, figsize = (10, 14))
+plot_importance(model, ax = ax)
+
+model.save_model('first_lgbm.model')
+
+
+
+
+
+
+
+
+
+
+# # 월별로 상점과 아이템에 대해서 묶어봐야겠음.
+# # year_month 컬럼 만들어주기
+# data['year_month'] = data['date'].dt.strftime('%Y-%m')
+# data
+
+# # date_block_num이 월별로 묶인거였음.. 버림.
+# data.drop('date_block_num', axis = 1, inplace = True)
+# data
+
+data
+
+X = data.drop('date', axis = 1).groupby('date_block_num').mean()
+X = data.drop('date', axis = 1).groupby('date_block_num').sum()
+X
 
 # 그룹핑 해주기
 # 월 단위로 합쳐보니 건질것은 월 판매량뿐..
