@@ -3,25 +3,14 @@ from typing import cast
 import warnings
 warnings.filterwarnings('ignore')
 
-# System related and data input controls
 import os
 
-# Data manipulation, visualization and useful functions
 import pandas as pd
 import numpy as np
-from itertools import product # iterative combinations
+from itertools import product 
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-# Modeling algorithms
-# General(Statistics/Econometrics)
-from sklearn import preprocessing
-import statsmodels.api as sm
-import statsmodels.tsa.api as smt
-import statsmodels.formula.api as smf
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-from scipy import stats
 
 # Regression
 from sklearn.linear_model import LinearRegression, Ridge, Lasso, ElasticNet
@@ -33,17 +22,6 @@ from sklearn.ensemble import RandomForestRegressor, BaggingRegressor, GradientBo
 from xgboost import XGBRegressor
 from lightgbm import LGBMRegressor
 
-# Classification
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.svm import LinearSVC, SVC
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.naive_bayes import GaussianNB
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-
-# Model selection
-from sklearn.model_selection import train_test_split,cross_validate
-from sklearn.model_selection import KFold
 from sklearn.model_selection import GridSearchCV
 
 # Evaluation metrics
@@ -52,7 +30,6 @@ from sklearn.metrics import mean_squared_log_error, mean_squared_error,  r2_scor
 # for classification
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
-import pandas as pd
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import Input, Dense, Activation, Flatten, Dropout
 from keras.layers import SimpleRNN, LSTM, GRU
@@ -61,7 +38,6 @@ from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.model_selection import KFold, cross_val_score
 import xgboost as xgb
 import lightgbm as lgb
-
 
 # 경로설정
 os.chdir('/Users/heechankang/projects/pythonworkspace/git_study/kaggle/competitive-data-science-predict-future-sales')
@@ -76,35 +52,35 @@ test = pd.read_csv('test.csv')
 sample_submission = pd.read_csv('sample_submission.csv')
 print('--- 완료 ---')
 
-#########
-item_categories #(84, 2)
-# 'item_category_name', 'item_category_id']
-items #(22170, 3)
-# 'item_name', 'item_id', 'item_category_id'
-train #(2935849, 6)
-#'date', 'date_block_num', 'shop_id', 'item_id', 'item_price', 'item_cnt_day'
-shops #(60, 2)
-# shop_name, shop_id
-###########
-test #(214200, 3)
-# 'ID', 'shop_id', 'item_id'
-sample_submission #(214200, 2)
-# 'ID', 'item_cnt_month'
+# #########
+# item_categories #(84, 2)
+# # 'item_category_name', 'item_category_id']
+# items #(22170, 3)
+# # 'item_name', 'item_id', 'item_category_id'
+# train #(2935849, 6)
+# #'date', 'date_block_num', 'shop_id', 'item_id', 'item_price', 'item_cnt_day'
+# shops #(60, 2)
+# # shop_name, shop_id
+# ###########
+# test #(214200, 3)
+# # 'ID', 'shop_id', 'item_id'
+# sample_submission #(214200, 2)
+# # 'ID', 'item_cnt_month'
 
 ############
-# 목표 확인..
-sample_submission # 껍데기. ID에 대해 월별 판매량 답안작성
-test # ID는 각 매장별 각 아이템 판매량을 뜻함.
+# # 목표 확인..
+# sample_submission # 껍데기. ID에 대해 월별 판매량 답안작성
+# test # ID는 각 매장별 각 아이템 판매량을 뜻함.
 
 # 데이터 리스트
 l = ['item_categories', 'items', 'train', 'shops', 'test', 'sample_submission']
 ll = [item_categories, items, train, shops, test, sample_submission]
 
-# 그냥 다 돌려보기
-for i in range(len(l)):
-    print(f'\n------------{l[i]}.info() ---------------\n', ll[i].info())
-    print(f'\n------------{l[i]}.shape() ---------------\n', ll[i].shape)
-    print(f'\n------------{l[i]}.describe() ---------------\n', ll[i].describe())
+# # 그냥 다 돌려보기
+# for i in range(len(l)):
+#     print(f'\n------------{l[i]}.info() ---------------\n', ll[i].info())
+#     print(f'\n------------{l[i]}.shape() ---------------\n', ll[i].shape)
+#     print(f'\n------------{l[i]}.describe() ---------------\n', ll[i].describe())
 
 # 결측치 확인
 print('--- 결측치 확인 ---')
@@ -148,22 +124,22 @@ data[data['item_cnt_day']<0] # 7356개
 
 # 이리저리 찍어봐도 환불로 인한 것은 아니라고 보임.
 # 비슷한 날짜에 개수가 같은것은 커녕, 같은 item_id도 없음.
-data[(data['date']=='2013-01-05')&(data['item_id']==2552)]
+# data[(data['date']=='2013-01-05')&(data['item_id']==2552)]
 
-data[data['item_cnt_day']<0]['shop_id'].unique()
-len(data[data['item_cnt_day']<0]['shop_id'].unique())
-data[data['item_cnt_day']<0]['shop_id'].value_counts()
-data[data['item_cnt_day']<0]['shop_id'].value_counts().sum()
+# data[data['item_cnt_day']<0]['shop_id'].unique()
+# len(data[data['item_cnt_day']<0]['shop_id'].unique())
+# data[data['item_cnt_day']<0]['shop_id'].value_counts()
+# data[data['item_cnt_day']<0]['shop_id'].value_counts().sum()
 
-data[data['item_cnt_day']<0]['item_id'].unique()
-len(data[data['item_cnt_day']<0]['item_id'].unique())
-data[data['item_cnt_day']<0]['item_id'].value_counts()
-data[data['item_cnt_day']<0]['item_id'].value_counts().sum()
+# data[data['item_cnt_day']<0]['item_id'].unique()
+# len(data[data['item_cnt_day']<0]['item_id'].unique())
+# data[data['item_cnt_day']<0]['item_id'].value_counts()
+# data[data['item_cnt_day']<0]['item_id'].value_counts().sum()
 
-data[data['item_cnt_day']==-22]
-data[(data['date']=='2013-11-02')&(data['item_id']==8023)]
-data[(data['item_id']==8023)].tail(50)
-data[(data['date']=='2013-11-02')]
+# data[data['item_cnt_day']==-22]
+# data[(data['date']=='2013-11-02')&(data['item_id']==8023)]
+# data[(data['item_id']==8023)].tail(50)
+# data[(data['date']=='2013-11-02')]
 
 # 결국 음수값들 떨어내기.
 data.shape # (2935843, 7)
@@ -174,32 +150,32 @@ data.shape # (2928487, 7)
 data = data[data['item_price']>0]
 data.shape # (2928486, 7)
 
-# 다시 살펴보기.. 가게랑 물건 종류가 다름.
-print('data shop 수:', len(data.shop_id.unique())) # 60
-print('test shop 수:', len(test.shop_id.unique())) # 42
-print('data item 수:', len(data.item_id.unique())) # 21804
-print('test item 수:', len(test.item_id.unique())) # 5100
+# # 다시 살펴보기.. 가게랑 물건 종류가 다름.
+# print('data shop 수:', len(data.shop_id.unique())) # 60
+# print('test shop 수:', len(test.shop_id.unique())) # 42
+# print('data item 수:', len(data.item_id.unique())) # 21804
+# print('test item 수:', len(test.item_id.unique())) # 5100
 
-# 수만 다른지, 내용물도 다른지 까봐야지
-len(set(data.shop_id.unique()) - set(test.shop_id.unique())) # 18
-len(set(test.shop_id.unique()) - set(data.shop_id.unique())) # 0
-    # shop_id의 경우, 트레인에는 테스트에 없는 것도 있다 + 테스트에는 트레인에 있는 모든 게 있다.
-    # train >>>> test
-len(set(data.item_id.unique()) - set(test.item_id.unique())) #17067
-len(set(test.item_id.unique()) - set(data.item_id.unique())) #363
-    # item_id의 경우, train의 대부분이 test에선 사라졌다
-    # 추가로 test에서 새로 생긴 게 363가지이다.
+# # 수만 다른지, 내용물도 다른지 까봐야지
+# len(set(data.shop_id.unique()) - set(test.shop_id.unique())) # 18
+# len(set(test.shop_id.unique()) - set(data.shop_id.unique())) # 0
+#     # shop_id의 경우, 트레인에는 테스트에 없는 것도 있다 + 테스트에는 트레인에 있는 모든 게 있다.
+#     # train >>>> test
+# len(set(data.item_id.unique()) - set(test.item_id.unique())) #17067
+# len(set(test.item_id.unique()) - set(data.item_id.unique())) #363
+#     # item_id의 경우, train의 대부분이 test에선 사라졌다
+#     # 추가로 test에서 새로 생긴 게 363가지이다.
 
-# 설마, shops 와 items도 검증.
-len(set(shops.shop_id.unique()) - set(data.shop_id.unique())) # 0
-len(set(data.shop_id.unique()) - set(shops.shop_id.unique())) # 0
-    # 동일함
-len(set(items.item_id.unique()) - set(data.item_id.unique())) # 366
-len(set(data.item_id.unique()) - set(items.item_id.unique())) # 0
-len(set(items.item_id.unique()) - set(test.item_id.unique())) # 17070
-len(set(test.item_id.unique()) - set(items.item_id.unique())) # 0
-    # 다행히 items 가 더 큰 범주로 다 포함함. 제한사항 없음.
-    # 당연히 아이템 카테고리도 전체를 포괄할 수 있음.
+# # 설마, shops 와 items도 검증.
+# len(set(shops.shop_id.unique()) - set(data.shop_id.unique())) # 0
+# len(set(data.shop_id.unique()) - set(shops.shop_id.unique())) # 0
+#     # 동일함
+# len(set(items.item_id.unique()) - set(data.item_id.unique())) # 366
+# len(set(data.item_id.unique()) - set(items.item_id.unique())) # 0
+# len(set(items.item_id.unique()) - set(test.item_id.unique())) # 17070
+# len(set(test.item_id.unique()) - set(items.item_id.unique())) # 0
+#     # 다행히 items 가 더 큰 범주로 다 포함함. 제한사항 없음.
+#     # 당연히 아이템 카테고리도 전체를 포괄할 수 있음.
 
 # 추가로 이상치 있는지도 확인
 fig, ax = plt.subplots(1, 2, figsize=(15, 5))
@@ -319,7 +295,7 @@ shops.columns = ['shop_id', 'city']
 shops
 
 item_categories
-item_categories.drop(['item_category_name', 'cat_name', 'cat_name2'], axis = 1, inplace=True)
+item_categories.drop(['item_category_name'], axis = 1, inplace=True)
 data
 item_categories=data[['item_id', 'cat_name', 'cat_name2','item_category_id']]
 item_categories.columns=['item_category_id', 'cat_name', 'cat_name2']
@@ -627,6 +603,7 @@ del data
 gc.collect();
 
 data = pd.read_pickle('data2.pkl')
+data.columns
 data.drop(['item_last_sale', 'item_cnt_month_lag_12', 'days', 'cat_name', 'city', 'item_shop_last_sale'], axis = 1, inplace=True)
 
 X_train = data[data['date_block_num']<33].drop('item_cnt_month', axis = 1)
@@ -699,12 +676,15 @@ submission = pd.DataFrame(
 submission.to_csv('lgbm_submission.csv', index=False)
 
 from xgboost import plot_importance
-
 fig, ax = plt.subplots(1, 1, figsize = (10, 14))
 plot_importance(model, ax = ax)
 
-model.save_model('first_lgbm.model')
+model.save_model('.model')
 
+
+from lightgbm import plot_importance
+fig, ax = plt.subplots(1, 1, figsize = (10, 14))
+plot_importance(lgbm, ax = ax)
 
 
 
