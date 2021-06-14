@@ -178,9 +178,9 @@ data.shape # (2928486, 7)
 #     # 당연히 아이템 카테고리도 전체를 포괄할 수 있음.
 
 # 추가로 이상치 있는지도 확인
-fig, ax = plt.subplots(1, 2, figsize=(15, 5))
-sns.boxplot(data['item_price'], ax=ax[0])
-sns.boxplot(data['item_cnt_day'], ax=ax[1])
+# fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+# sns.boxplot(data['item_price'], ax=ax[0])
+# sns.boxplot(data['item_cnt_day'], ax=ax[1])
 
 data['item_price'].quantile(0.9999) # 29990
 data[data['item_price']>50000] # 3개 뿐
@@ -196,9 +196,9 @@ data = data[data['item_cnt_day']<1000]
 print('제거 후 data.shape:', data.shape) #(2928483, 7)
 
 # 이상치 제거 후 다시 그려보기
-fig, ax = plt.subplots(1, 2, figsize=(15, 5))
-sns.boxplot(data['item_price'], ax=ax[0])
-sns.boxplot(data['item_cnt_day'], ax=ax[1])
+# fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+# sns.boxplot(data['item_price'], ax=ax[0])
+# sns.boxplot(data['item_cnt_day'], ax=ax[1])
 
 # # date_block_num은 뭔지 모르겠음.
 # data['date_block_num'].unique() # 0~33까지.
@@ -211,10 +211,10 @@ data = data.sort_values('date')
 data = data.reset_index(drop=True)
 data
 
-# 모르겠으니 일단 가게별 상태보기.
-data_shop = data.groupby('shop_id').sum()
-data_shop
-# 합쳐놓고 보니, 건질게 쓸모없음. 월별로 합쳐야함.
+# # 모르겠으니 일단 가게별 상태보기.
+# data_shop = data.groupby('shop_id').sum()
+# data_shop
+# # 합쳐놓고 보니, 건질게 쓸모없음. 월별로 합쳐야함.
 
 data
 
@@ -294,12 +294,12 @@ shops.drop(['shop_name'], axis=1, inplace=True)
 shops.columns = ['shop_id', 'city']
 shops
 
-item_categories
 item_categories.drop(['item_category_name'], axis = 1, inplace=True)
-data
-item_categories=data[['item_id', 'cat_name', 'cat_name2','item_category_id']]
-item_categories.columns=['item_category_id', 'cat_name', 'cat_name2']
 item_categories
+# data
+# item_categories=data[['item_id', 'cat_name', 'cat_name2','item_category_id']]
+# item_categories.columns=['item_category_id', 'cat_name', 'cat_name2']
+# item_categories
 
 items.drop('item_name', axis = 1, inplace=True)
 items
@@ -501,12 +501,13 @@ data2['price_lag']
 data2.info()
 
 data2.columns
-data2.drop(['item_price_mean',
-       'item_price_month_mean', 'item_price_month_mean_lag_1',
-       'item_price_month_mean_lag_2', 'item_price_month_mean_lag_3',
-       'item_price_month_mean_lag_4', 'item_price_month_mean_lag_5',
-       'item_price_month_mean_lag_6', 'price_lag_1', 'price_lag_2',
-       'price_lag_3', 'price_lag_4', 'price_lag_5', 'price_lag_6'], axis = 1, inplace=True)
+#TODO:
+# data2.drop(['item_price_mean',
+#        'item_price_month_mean', 'item_price_month_mean_lag_1',
+#        'item_price_month_mean_lag_2', 'item_price_month_mean_lag_3',
+#        'item_price_month_mean_lag_4', 'item_price_month_mean_lag_5',
+#        'item_price_month_mean_lag_6', 'price_lag_1', 'price_lag_2',
+#        'price_lag_3', 'price_lag_4', 'price_lag_5', 'price_lag_6'], axis = 1, inplace=True)
 
 data2
 
@@ -577,23 +578,16 @@ for idx, row in tqdm(data2.iterrows()):
 data2['item_shop_first_sale'] = data2['date_block_num'] - data2.groupby(['item_id', 'shop_id'])['date_block_num'].transform('min')
 data2['item_first_sale'] = data2['date_block_num'] - data2.groupby('item_id')['date_block_num'].transform('min')
 
-# ~12월 드롭
-data2 = data2[data2['date_block_num']>11]
 
-# 결측치 0으로 채우기
-def fill_na(df):
-    for col in df.columns:
-        if ('_lag_' in col) & (df[col].isnull().any()):
-            if ('item_cnt' in col):
-                df[col].fillna(0, inplace=True)
-    return df
+data2.info()
+data2
 
-data2 = fill_na(data2)
 
-data2.columns
+
+
 
 import gc
-data2.to_pickle('data2.pkl')
+data2.to_pickle('.pkl')
 del data2
 del cache
 del items
@@ -602,17 +596,104 @@ del train
 del data
 gc.collect();
 
-data = pd.read_pickle('data2.pkl')
+
+
+
+
+
+
+
+
+
+
+
+# data = pd.read_pickle('data2.pkl')
+data = pd.read_pickle('full_data.pkl')
+# data.to_csv('full_data.csv')
 data.columns
-data.drop(['item_last_sale', 'item_cnt_month_lag_12', 'days', 'cat_name', 'city', 'item_shop_last_sale'], axis = 1, inplace=True)
+data.isna().sum()
+data
+# ~12월 드롭
+# data = data[data['date_block_num']>11]
+
+# lag 결측치 평균값으로 채우기
+def fill_mean(df):
+    for col in df.columns:
+        tmp=df[col].mean()
+        if ('_lag_' in col):
+            df[col].fillna(tmp, inplace=True)
+    return df
+data.describe()
+len(data.columns)
+
+
+# 결측치 0으로 채우기
+def fill_na(df):
+    for col in df.columns:
+        df[col].fillna(0, inplace=True)
+    return df
+data.info()
+# data = fill_mean(data)
+data = fill_na(data)
+
+data.item_first_sale.describe()
+data.item_first_sale.describe()
+
+data.drop(
+    ['item_last_sale',
+     'price_lag',
+     'price_lag_1',
+     'item_cnt_month_mean',
+     'item_cnt_month_lag_2',
+     'item_price_month_mean_lag_1',
+     
+     ], axis = 1, inplace=True)
+
+
+
+data = data[['shop_id', 'ID','date_block_num',
+       'item_cnt_month_lag_1', 'item_cnt_month_shop_mean',
+       'item_cnt_month_item_mean', 'item_cnt_month_cat_mean',
+       'item_cnt_month_shop_cat_mean', 'item_cnt_month_shop_catname_mean',
+       'item_cnt_month_shop_catname2_mean', 'item_cnt_month_city',
+       'item_cnt_month_item_city',
+       'item_cnt_month_catname2', 'item_cnt_month']]
+
+
+# 없던 363개에 initial sale 추가하기
+data['item_first_sale'] = data.groupby(['item_id'])['date_block_num'].transform('min')
+data['item_shop_first_sale'] = data.groupby(['item_id', 'shop_id'])['date_block_num'].transform('min')
+data['item_first_sale'] = data2['date_block_num'] - data2.groupby('item_id')['date_block_num'].transform('min')
+data[data['date_block_num']==34]['item_shop_first_sale']
+# 신상품 363개 목록
+new_item = list(set(test.item_id.unique()) - set(train.item_id.unique()))
+new_item
+
+data[data['item_id']==8182]
+data.item_first_sale.mean()
+data['item_fitst_sale2'] = data['item_first_sale'].mean() if 
+
+data
+#data.drop(['item_last_sale', 'item_cnt_month_lag_12', 'days', 'cat_name','item_cnt_month_lag_6'], axis = 1, inplace=True)
+
 
 X_train = data[data['date_block_num']<33].drop('item_cnt_month', axis = 1)
 y_train = data[data['date_block_num']<33]['item_cnt_month']
 X_valid = data[data['date_block_num']==33].drop('item_cnt_month', axis = 1)
 y_valid = data[data['date_block_num']==33]['item_cnt_month']
 X_test = data[data['date_block_num']==34].drop('item_cnt_month', axis = 1)
+X_train
+
+X_train.drop('date_block_num', axis = 1, inplace=True)
+X_valid.drop('date_block_num', axis = 1, inplace=True)
+X_test.drop('date_block_num', axis = 1, inplace=True)
 
 del data
+def X_train
+def y_train
+def X_valid
+def y_valid
+def x_test
 gc.collect();
 
 
@@ -627,6 +708,25 @@ model = XGBRegressor(
     eta=0.3,
     seed=42)
 
+# 랜덤서치 결과
+model = XGBRegressor(
+    max_depth = 10,
+    n_estimators = 8,
+    learning_rate = 0.1,
+    seed=42)
+
+# 훔치기!!!
+model = XGBRegressor(
+    max_depth = 11, 
+    min_child_weight=0.5, 
+    subsample = 1, 
+    eta = 0.3, 
+    num_round = 1000, 
+    seed = 1, 
+    nthread = 16
+)
+
+
 model.fit(
     X_train,
     y_train,
@@ -637,7 +737,7 @@ model.fit(
 )
 
 y_pred = model.predict(X_valid).clip(0, 20)
-y_test = model.predict(X_test).clip(0, 20)
+y_test_xgboost = model.predict(X_test).clip(0, 20)
 
 # 기본모델
 xgb = XGBClassifier(tree_method='hist', random_state = 42)
@@ -663,17 +763,45 @@ lgbm.fit(
     early_stopping_rounds=10
 )
 
-y_test = lgbm.predict(X_test).clip(0, 20)
+y_test_lgbm = lgbm.predict(X_test).clip(0, 20)
 
 
+from sklearn.ensemble import RandomForestRegressor
+rf = RandomForestRegressor(
+    n_estimators=25,
+    random_state=42, 
+    max_depth=15, 
+    n_jobs=-1
+)
+rf.fit(
+    X_train,
+    y_train,
+    verbose = True
+)
+
+y_test_rf = rf.predict(X_test).clip(0, 20)
+
+
+
+
+
+
+#--*-*-*-*-제출셋 만들기
 test
 submission = pd.DataFrame(
     {
         'ID':test.index,
-        'item_cnt_month':y_test
+        'item_cnt_month':y_test_xgboost,
     }
 )
-submission.to_csv('lgbm_submission.csv', index=False)
+
+submission['item_cnt_month'] = (submission['item_cnt_month1']+submission['item_cnt_month2']+submission['item_cnt_month3'])/3
+
+submission.drop(['item_cnt_month1', 'item_cnt_month2','item_cnt_month3'], axis = 1, inplace=True)
+
+submission
+
+submission.to_csv('xgb_submission_7.csv', index=False)
 
 from xgboost import plot_importance
 fig, ax = plt.subplots(1, 1, figsize = (10, 14))
@@ -685,6 +813,98 @@ model.save_model('.model')
 from lightgbm import plot_importance
 fig, ax = plt.subplots(1, 1, figsize = (10, 14))
 plot_importance(lgbm, ax = ax)
+
+
+
+
+
+
+params = {
+    'n_estimators': [8, 16, 24],
+    'max_depth': [3, 5, 7, 10],
+    'num_iterations': [1000, 1500],
+    'learning_rate': [0.05, 0.07, 0.1],
+    'colsample_bytree': [0.5, 1],
+    'subsample': [0.7, 0.8],
+}
+
+lgbm = LGBMRegressor(
+    n_estimators=params['n_estimators'],
+    max_depth=params['max_depth'],
+    num_iterations=params['num_iterations'],
+    learning_rate=params['learning_rate'],
+    colsample_bytree=params['colsample_bytree'],
+    subsample=params['subsample'],
+)
+
+xgboost = XGBRegressor(
+    n_estimators=params['n_estimators'],
+    max_depth=params['max_depth'],
+    num_iterations=params['num_iterations'],
+    learning_rate=params['learning_rate'],
+    colsample_bytree=params['colsample_bytree'],
+    subsample=params['subsample'],
+)
+
+models = [lgbm, xgboost]
+
+# 두 모델의 fit, score을 포문으로 돌림
+for i in models:
+    grid_model = GridSearchCV(i, param_grid=params,
+                              scoring='neg_mean_squared_error',
+                              cv=5,
+                              n_jobs=5,
+                              )
+
+    grid_model.fit(X_train, y_train,
+                   eval_metric='rmse',
+                   eval_set=[(X_train, y_train), (X_valid, y_valid)],
+                   verbose=True,
+                   early_stopping_rounds=10
+                   )
+
+    y_pred = i.predict(X_valid).clip(0, 20)
+    y_test = i.predict(X_test).clip(0, 20)
+
+    # gridsearch의 결과들은
+    # grid_model.cv_results_
+    # 로 들어간다.
+
+    # 파라미터 조합은 params에 들어가있고 점수는 mean_test_score에 들어가있다.
+    params= grid_model.cv_results_['params']
+    score = grid_model.cv_results_['neg_mean_test_score']
+
+    # 파라미터 조합과 점수를 데이터프레임으로 만들자!!
+    results = pd.DataFrame(params)
+
+    # 이 score를 RMSE로 바꿔주려면 양수로 만들고 루트를 씌워주어야 한다.
+    results['RMSE'] = np.sqrt(-1 * results['score'])
+    results['score']= score
+    print('-----score-----')
+    print(results['score'])
+
+    # submission 만들기############
+    submission = pd.DataFrame(
+        {
+            'ID': test.index,
+            'item_cnt_month': y_test
+        }
+    )
+    submission.to_csv('{}_submission.csv'.format(i), index=False)
+
+    # 그래프 그리기
+    fig, ax = plt.subplots(1, 1, figsize=(10, 14))
+    plot_importance(i, ax=ax)
+
+    # 모델 저장하기
+    i.save_model('first_{}.model'.format(i))
+
+
+
+
+
+
+
 
 
 
