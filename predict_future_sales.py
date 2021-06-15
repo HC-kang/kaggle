@@ -614,7 +614,7 @@ data.columns
 data.isna().sum()
 data
 # ~12월 드롭
-# data = data[data['date_block_num']>11]
+data = data[data['date_block_num']>11]
 
 # lag 결측치 평균값으로 채우기
 def fill_mean(df):
@@ -658,6 +658,36 @@ data = data[['shop_id', 'ID','date_block_num',
        'item_cnt_month_shop_catname2_mean', 'item_cnt_month_city',
        'item_cnt_month_item_city',
        'item_cnt_month_catname2', 'item_cnt_month']]
+
+data.columns
+data = data[['date_block_num', 'shop_id', 'item_id', 'item_cnt_month', 'ID', 'city',
+       'item_category_id', 'cat_name', 'cat_name2', 'item_cnt_month_lag_1',
+       'item_cnt_month_lag_2', 'item_cnt_month_lag_3',
+       'item_cnt_month_mean',
+       'item_cnt_month_shop_mean', 'item_cnt_month_item_mean',
+       'item_cnt_month_cat_mean', 'item_cnt_month_shop_cat_mean',
+       'item_cnt_month_shop_catname_mean', 'item_cnt_month_shop_catname2_mean',
+       'item_cnt_month_city', 'item_cnt_month_item_city',
+       'item_cnt_month_catname', 'item_cnt_month_catname2', 'item_price_mean',
+       'item_price_month_mean', 'item_price_month_mean_lag_1',
+       'price_lag_1', 'price_lag_2',
+       'delta_revenue_lag_1',
+       'item_shop_first_sale','item_first_sale']]
+
+data = data[['date_block_num', 'shop_id', 'item_id', 'item_cnt_month',
+       'item_category_id','cat_name2',
+       'item_cnt_month_mean',
+       'item_cnt_month_shop_mean', 'item_cnt_month_item_mean',
+       'item_cnt_month_cat_mean', 'item_cnt_month_shop_cat_mean',
+       'item_cnt_month_shop_catname_mean', 'item_cnt_month_shop_catname2_mean',
+       'item_cnt_month_city', 'item_cnt_month_item_city',
+       'item_cnt_month_catname', 'item_cnt_month_catname2', 'item_price_mean',
+       'item_price_month_mean',
+       'item_shop_first_sale', 'item_first_sale']]
+
+
+data = data[['date_block_num', 'shop_id',
+       'item_cnt_month_shop_mean','item_cnt_month_item_city','item_cnt_month']]
 
 
 # 없던 363개에 initial sale 추가하기
@@ -752,7 +782,7 @@ lgbm = LGBMRegressor(
     colsample_bytree=0.8,
     subsample=0.8,
     eta=0.3,
-    seep=42
+    seed=42
 )
 lgbm.fit(
     X_train,
@@ -760,7 +790,7 @@ lgbm.fit(
     eval_metric='rmse',
     eval_set=[(X_train, y_train), (X_valid, y_valid)],
     verbose=True,
-    early_stopping_rounds=10
+    early_stopping_rounds=30
 )
 
 y_test_lgbm = lgbm.predict(X_test).clip(0, 20)
@@ -776,7 +806,6 @@ rf = RandomForestRegressor(
 rf.fit(
     X_train,
     y_train,
-    verbose = True
 )
 
 y_test_rf = rf.predict(X_test).clip(0, 20)
@@ -791,7 +820,7 @@ test
 submission = pd.DataFrame(
     {
         'ID':test.index,
-        'item_cnt_month':y_test_xgboost,
+        'item_cnt_month':y_test_rf,
     }
 )
 
@@ -801,7 +830,7 @@ submission.drop(['item_cnt_month1', 'item_cnt_month2','item_cnt_month3'], axis =
 
 submission
 
-submission.to_csv('xgb_submission_7.csv', index=False)
+submission.to_csv('rf_submission_3.csv', index=False)
 
 from xgboost import plot_importance
 fig, ax = plt.subplots(1, 1, figsize = (10, 14))
